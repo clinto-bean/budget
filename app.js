@@ -19,10 +19,6 @@ app.use((req, res) => {
 
 // envelope
 app.use("/envelopes", envelopeRouter)
-// money handlers
-app.post("/envelopes/deposit", handlerAddFunds)
-app.post("/envelopes/withdraw", handlerWithdrawFunds)
-app.post("/envelopes/transfer", handlerTransferFunds)
 app.listen(port, (err) => {
   if (err) console.error(`Error: ${err}`)
   console.log(`Application now running on port ${port}`)
