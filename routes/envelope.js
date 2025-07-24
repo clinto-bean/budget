@@ -9,6 +9,8 @@ import {
   handlerTransferFunds,
 } from "../envelope.js"
 
+import express from "express"
+
 const router = express.Router()
 
 // CRUD
