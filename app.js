@@ -1,24 +1,29 @@
 import "dotenv/config"
 import express from "express"
 import { MiddlewareLogger } from "./middleware.js"
-import {
-  handlerDeleteEnvelope,
-  handlerGetEnvelopes,
-  handlerCreateEnvelope,
-  handlerGetEnvelopeByID,
-  handlerModifyEnvelope,
-} from "./envelope.js"
+import envelopeRouter from "./routes/envelopes.js"
+
+// environment variables
 const port = process.env.PORT || 3000
+const DEBUGMODE = process.env.DEBUGMODE === "TRUE"
 
 const app = express()
+// when debugmode is on, log timestamp, method and route
+DEBUGMODE && app.use(MiddlewareLogger)
+
 app.use(express.json())
-app.use(MiddlewareLogger)
-app.post("/envelopes", handlerCreateEnvelope)
-app.get("/envelopes", handlerGetEnvelopes)
-app.get("/envelopes/:id", handlerGetEnvelopeByID)
-app.patch("/envelopes/:id", handlerModifyEnvelope)
-app.delete("/envelopes/:id", handlerDeleteEnvelope)
+//invalid route
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" })
+})
+
+// envelope
+app.use("/envelopes", envelopeRouter)
+// money handlers
+app.post("/envelopes/deposit", handlerAddFunds)
+app.post("/envelopes/withdraw", handlerWithdrawFunds)
+app.post("/envelopes/transfer", handlerTransferFunds)
 app.listen(port, (err) => {
-  if (err) console.log(`Error: ${err}`)
+  if (err) console.error(`Error: ${err}`)
   console.log(`Application now running on port ${port}`)
 })

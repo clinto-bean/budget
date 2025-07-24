@@ -1,6 +1,8 @@
+import { validateIDs } from "./util"
+
 const envelopes = new Map()
 
-class Envelope {
+export class Envelope {
   constructor(title, description, initialBalance = 0, lineItems = [], id) {
     this.title = title
     this.description = description
@@ -17,11 +19,31 @@ class Envelope {
     return this._lineItems
   }
 
-  add(description = "Funds added", amount) {
-    const transactionID = this._lineItems.length + 1
-    this._lineItems.push({ id: transactionID, description, amount })
-    this._balance += amount
-    return `${transactionID}: ${description} - ${amount}`
+  async addFunds(description = "Funds added", amount) {
+    try {
+      let desc = `Deposit: ${description}`
+      this._lineItems.push({ desc, amount, date: new Date().toISOString() })
+      this._balance += amount
+    } catch (e) {
+      throw new Error(`addFunds failed: ${e.message}`)
+    }
+  }
+
+  async withdrawFunds(description = "Funds withdrawn", amount) {
+    if (amount > this._balance) {
+      throw new Error("Insufficient balance")
+    }
+    try {
+      let desc = `Withdraw: ${description}`
+      this._lineItems.push({
+        desc,
+        amount: -amount,
+        date: new Date().toISOString(),
+      })
+      this._balance -= amount
+    } catch (e) {
+      throw new Error(`withdrawFunds failed: ${e.message}`)
+    }
   }
 
   toJSON() {
@@ -35,7 +57,9 @@ class Envelope {
   }
 }
 
-function handlerCreateEnvelope(req, res) {
+export function handlerCreateEnvelope(req, res) {
+  const { title, description = null, balance = 0, lineItems = [] } = req.body
+
   if (!req.body.title) {
     return res
       .status(400)
@@ -43,10 +67,10 @@ function handlerCreateEnvelope(req, res) {
   }
 
   const envelope = new Envelope(
-    req.body.title,
-    req.body.description ?? null,
-    req.body.balance ?? 0,
-    req.body.lineItems ?? [],
+    title,
+    description,
+    balance,
+    lineItems,
     envelopes.size + 1
   )
 
@@ -55,7 +79,7 @@ function handlerCreateEnvelope(req, res) {
   res.status(201).json(envelope.toJSON())
 }
 
-function handlerGetEnvelopes(req, res) {
+export function handlerGetEnvelopes(req, res) {
   try {
     if (envelopes.size === 0) {
       return res.status(404).json({ error: "No envelopes found" })
@@ -69,12 +93,10 @@ function handlerGetEnvelopes(req, res) {
   }
 }
 
-function handlerDeleteEnvelope(req, res) {
-  const id = parseInt(req.params.id, 10)
-  if (!id) {
-    return res
-      .status(400)
-      .json({ error: "Invalid search parameter, numbers only" })
+export function handlerDeleteEnvelope(req, res) {
+  const id = Number(req.params.id)
+  if (!validateIDs(id)) {
+    return res.status(400).json({ error: "Invalid envelope ID" })
   }
 
   const envelope = envelopes.get(id)
@@ -91,12 +113,10 @@ function handlerDeleteEnvelope(req, res) {
   }
 }
 
-function handlerGetEnvelopeByID(req, res) {
-  const id = parseInt(req.params.id, 10)
-  if (!id) {
-    return res
-      .status(400)
-      .json({ error: "Invalid search parameter, numbers only" })
+export function handlerGetEnvelopeByID(req, res) {
+  const id = Number(req.params.id)
+  if (!validateIDs(id)) {
+    return res.status(400).json({ error: "Invalid envelope ID" })
   }
 
   const envelope = envelopes.get(id)
@@ -107,12 +127,10 @@ function handlerGetEnvelopeByID(req, res) {
   res.status(200).json({ envelope: envelope.toJSON() })
 }
 
-function handlerModifyEnvelope(req, res) {
-  const id = parseInt(req.params.id, 10)
-  if (!id) {
-    return res
-      .status(400)
-      .json({ error: "Invalid search parameter, numbers only" })
+export function handlerModifyEnvelope(req, res) {
+  const id = Number(req.params.id)
+  if (!validateIDs(id)) {
+    return res.status(400).json({ error: "Invalid envelope ID" })
   }
 
   const envelope = envelopes.get(id)
@@ -126,11 +144,104 @@ function handlerModifyEnvelope(req, res) {
   res.status(200).json({ envelope: envelope.toJSON() })
 }
 
-export {
-  Envelope,
-  handlerModifyEnvelope,
-  handlerGetEnvelopes,
-  handlerCreateEnvelope,
-  handlerDeleteEnvelope,
-  handlerGetEnvelopeByID,
+// money handlers
+export async function handlerAddFunds(req, res) {
+  let description = req.body.description || ""
+  let amount = req.body.amount
+  if (amount <= 0) {
+    res.status(400).json({ error: "can only add positive amounts" })
+    return
+  }
+  const envelopeID = Number(req.body.envelope)
+  if (!validateIDs(envelopeID)) {
+    return res.status(400).json({ error: "Invalid envelope ID" })
+  }
+  const envelope = envelopes.get(envelopeID)
+  if (!envelope) {
+    return res
+      .status(404)
+      .json({ error: `Envelope not found with id ${envelopeID}` })
+  }
+
+  try {
+    await envelope.addFunds(description, req.body.amount)
+
+    res.status(200).json({
+      transaction: {
+        type: "deposit",
+        amount: req.body.amount,
+        newBalance: envelope.balance,
+      },
+    })
+  } catch (e) {
+    console.error(`Error: ${e}`)
+    res.status(500).json({ error: "internal server error" })
+    return
+  }
+}
+
+export async function handlerWithdrawFunds(req, res) {
+  let description = req.body.description || ""
+  let amount = req.body.amount
+  if (amount <= 0) {
+    res.status(400).json({ error: "can only add positive amounts" })
+    return
+  }
+  const envelopeID = Number(req.body.envelope)
+  if (!validateIDs(envelopeID)) {
+    return res.status(400).json({ error: "Invalid envelope ID" })
+  }
+  const envelope = envelopes.get(envelopeID)
+  if (!envelope) {
+    return res
+      .status(404)
+      .json({ error: `Envelope not found with id ${envelopeID}` })
+  }
+
+  try {
+    await envelope.withdrawFunds(description, amount)
+
+    res.status(200).json({
+      transaction: {
+        type: "withdraw",
+        amount: amount,
+        newBalance: envelope.balance,
+      },
+    })
+  } catch (e) {
+    console.error(`Error: ${e}`)
+    res.status(500).json({ error: "internal server error" })
+    return
+  }
+}
+
+export async function handlerTransferFunds(req, res) {
+  const fromID = Number(req.body.from)
+  const toID = Number(req.body.to)
+
+  if (!validateIDs(fromID, toID)) {
+    return res.status(400).json({ error: "Invalid envelope ID(s)" })
+  }
+
+  const fromEnvelope = envelopes.get(fromID)
+  const toEnvelope = envelopes.get(toID)
+  if (!fromEnvelope) {
+    res.status(404).json({ error: `envelope ${fromID} not found` })
+    return
+  }
+  if (!toEnvelope) {
+    res.status(404).json({ error: `envelope ${toID} not found` })
+    return
+  }
+  try {
+    await fromEnvelope.withdrawFunds(req.body.description, req.body.amount)
+    await toEnvelope.addFunds(req.body.description, req.body.amount)
+    res.status(200).json({
+      message: `Successfully transferred $${req.body.amount} from ${fromID} to ${toID}`,
+    })
+  } catch (e) {
+    console.error(`Error: ${e}`)
+    res.status(500).json({ error: "internal server error" })
+    return
+  }
 }
