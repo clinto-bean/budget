@@ -1,4 +1,4 @@
-import { validateIDs } from "./util"
+import { validateIDs } from "./util.js"
 
 const envelopes = new Map()
 

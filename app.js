@@ -1,7 +1,7 @@
 import "dotenv/config"
 import express from "express"
 import { MiddlewareLogger } from "./middleware.js"
-import envelopeRouter from "./routes/envelopes.js"
+import envelopeRouter from "./routes/envelope.js"
 
 // environment variables
 const port = process.env.PORT || 3000
