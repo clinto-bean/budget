@@ -52,7 +52,7 @@ export class Envelope {
       title: this.title,
       description: this.description,
       balance: this._balance,
-      items: this._lineItems,
+      transactionHistory: this._lineItems,
     }
   }
 }
